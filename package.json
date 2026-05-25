@@ -1,0 +1,77 @@
+{
+  "name": "@cross-deck/react-native",
+  "version": "1.0.0",
+  "description": "Crossdeck SDK for React Native + Expo — verified subscriptions, entitlements, error capture, and product telemetry across iOS + Android JS apps in one package.",
+  "license": "MIT",
+  "homepage": "https://cross-deck.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/VistaApps-za/crossdeck-react-native.git"
+  },
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "react-native": "./dist/index.mjs",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs",
+      "react-native": "./dist/index.mjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "tsup",
+    "build:watch": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "lint": "tsc --noEmit",
+    "prepublishOnly": "npm run lint && npm test && npm run build"
+  },
+  "peerDependencies": {
+    "react-native": ">=0.71",
+    "@react-native-async-storage/async-storage": ">=1.17"
+  },
+  "peerDependenciesMeta": {
+    "@react-native-async-storage/async-storage": {
+      "optional": true
+    }
+  },
+  "devDependencies": {
+    "@react-native-async-storage/async-storage": "^2.1.0",
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.0",
+    "@vitest/coverage-v8": "^2.1.9",
+    "react": "18.2.0",
+    "react-native": "0.74.5",
+    "tsup": "^8.3.5",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.9"
+  },
+  "keywords": [
+    "react-native",
+    "expo",
+    "subscriptions",
+    "entitlements",
+    "telemetry",
+    "errors",
+    "ios",
+    "android",
+    "saas",
+    "revenue",
+    "crossdeck",
+    "rn"
+  ]
+}
