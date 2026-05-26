@@ -4,6 +4,19 @@ All notable changes to `@cross-deck/react-native` will be documented
 here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.4.1] — 2026-05-26
+
+Patch — add automated npm publish workflow to the public
+`crossdeck-react-native` repo so future `vX.Y.Z` tag pushes
+auto-publish to npm via OIDC Trusted Publishing (matches the
+existing `crossdeck-web` pattern). No SDK code changes vs v1.4.0.
+
+**Operator note:** npmjs.com Trusted Publisher rule must be
+configured for `crossdeck-react-native` (owner: VistaApps-za,
+workflow: publish.yml) before the OIDC publish succeeds. First
+publish after this lands will fail with an auth error if the
+rule is missing — that's the prompt to configure it.
+
 ## [1.4.0] — 2026-05-26
 
 **Bank-grade reconciliation release.** Joined the v1.4.0 release line with the rest of the Crossdeck SDK suite. 6-pillar KPMG-style audit closed; every behavioural guarantee registered in the monorepo's `contracts/` directory with a CI-enforced audit job.

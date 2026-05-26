@@ -1,0 +1,63 @@
+name: Publish to npm
+
+# Triggers when you push a git tag matching v* (e.g. v0.1.0, v1.2.3-beta).
+# The release pipeline runs the test suite, builds the package, and
+# publishes to npm via OIDC Trusted Publishing — no NPM_TOKEN needed.
+#
+# OIDC requires:
+#   - id-token: write permission (set below)
+#   - npm 11.5.1+ on the runner (setup-node@v4 with node 22+ ships this)
+#   - A Trusted Publisher entry on npmjs.com pointing at:
+#       owner: VistaApps-za
+#       repo:  crossdeck-react-native
+#       workflow: publish.yml
+#       environment: (none)
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write       # for creating the GitHub Release
+  id-token: write       # OIDC token for npm trusted publishing + provenance
+
+jobs:
+  publish:
+    name: Publish ${{ github.ref_name }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # Node 24 ships with npm 11.x out of the box, which supports
+          # OIDC trusted publishing. Don't try to self-upgrade npm —
+          # `npm install -g npm@latest` from inside npm corrupts the
+          # install (known bug, "Cannot find module 'promise-retry'").
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run lint
+
+      - name: Test
+        run: npm test
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish to npm (OIDC)
+        # No NODE_AUTH_TOKEN — npm CLI authenticates via the GitHub OIDC
+        # token, which only works because (1) id-token: write is set above
+        # and (2) npmjs.com has a Trusted Publisher rule matching this
+        # repo + workflow. --provenance is implicit with OIDC.
+        run: npm publish --access public
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
