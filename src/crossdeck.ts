@@ -82,12 +82,27 @@ import type {
  * and threaded through `trackPostHydration()`. Without this, the
  * post-hydration body would read state mutated AFTER the caller's
  * track() returned — see the comment on `track()` for the racing
- * pattern. Currently scoped to `sessionId` (the only volatile axis
- * the v1.4.0 contract tests pin); add more fields here as the
- * enrichment layer grows.
+ * pattern.
+ *
+ * `seq` is captured here (spec §3) — the monotonic counter must be
+ * incremented SYNCHRONOUSLY at the same instant as `timestamp` so
+ * the (timestamp, seq) pair is a coherent sample. If seq were
+ * assigned post-hydration the ordering guarantee breaks for the
+ * common pre-hydration track() → hydration completes → flush path.
  */
 interface TrackCallSnapshot {
   sessionId: string | null;
+  /** Per-session seq value assigned to this event at track() call time. */
+  seq: number;
+  /**
+   * Client occurrence time (epoch ms) sampled at track() call time — the
+   * SAME instant as `seq`. It MUST be captured here, not later in
+   * trackPostHydration: for a pre-hydration track() the post-hydration body
+   * runs inside `s.ready.then(...)`, hundreds of ms later, so a `Date.now()`
+   * there would stamp flush time, not occurrence time — desyncing (timestamp,
+   * seq) exactly as the Event Envelope program exists to prevent.
+   */
+  timestamp: number;
 }
 
 interface InternalState {
@@ -119,6 +134,14 @@ interface InternalState {
    * host via setSessionId(...)). Attached to every track event so
    * cross-platform funnel queries reconcile with web SDK sessions. */
   sessionId: string | null;
+  /**
+   * Per-session monotonic sequence counter (spec §3).
+   * Incremented once per event at enqueue time, SYNCHRONOUSLY with
+   * timestamp capture. Reset to 0 at session.started (handled in
+   * setSessionId()). Persists across app background/foreground within
+   * the same session as required by the spec.
+   */
+  seqCounter: number;
   lastServerTime: number | null;
   lastClientTime: number | null;
   /** Promise that resolves when async hydration completes. */
@@ -274,6 +297,7 @@ export class CrossdeckClient {
       batchSize: opts.eventFlushBatchSize,
       intervalMs: opts.eventFlushIntervalMs,
       envelope: () => ({
+        envelopeVersion: 1 as const,
         appId: opts.appId,
         environment: opts.environment,
         sdk: { name: SDK_NAME, version: opts.sdkVersion },
@@ -335,6 +359,7 @@ export class CrossdeckClient {
       debug,
       developerUserId: null,
       sessionId: null,
+      seqCounter: 0,
       lastServerTime: null,
       lastClientTime: null,
       started: false,
@@ -726,8 +751,21 @@ export class CrossdeckClient {
    * Subscribe to entitlement-cache changes. Returns an idempotent
    * unsubscribe fn. The listener fires AFTER `getEntitlements()`
    * warms the cache, after `syncPurchases()` delivers fresh
-   * entitlements, and on `reset()` to fire the empty-cache state
-   * for logout flows.
+   * entitlements, on `reset()` to fire the empty-cache state for
+   * logout flows, AND on `identify()` after the per-user cache slot
+   * rotates + re-hydrates from device storage.
+   *
+   * IMPORTANT — the `identify()` fire is a TRAP if you treat it as
+   * authoritative network state. `identify()` does NOT fetch
+   * entitlements; it switches the per-user cache slot and rehydrates
+   * from device storage (empty for a brand-new install, last-known-
+   * good — possibly stale — for a returning user). A listener that
+   * gates a paywall on the first fire after an identity switch will
+   * read `false` for a paying customer on a fresh device and let them
+   * past the gate as free. The network-truth fire is the one that
+   * follows the next `getEntitlements()` resolution. Either call
+   * `getEntitlements()` explicitly after `identify()`, or have your
+   * gating code tolerate the empty-then-populated transition.
    *
    * Listener errors are swallowed (a buggy consumer must not crash
    * the SDK or other listeners).
@@ -795,8 +833,15 @@ export class CrossdeckClient {
     // bodies fire post-hydration — silently rewriting the first
     // event with the second event's state. The Web SDK has no
     // hydration window so this race only exists on RN.
+    // Increment seq SYNCHRONOUSLY here — spec §3 requires the counter
+    // to be captured at the same instant as the timestamp sample so
+    // the (timestamp, seq) pair is coherent. The post-hydration body
+    // just consumes the pre-captured value; it never touches the
+    // counter.
     const callTimeSnapshot: TrackCallSnapshot = {
       sessionId: s.sessionId,
+      seq: s.seqCounter++,
+      timestamp: Date.now(),
     };
     if (!s.hydrated) {
       void s.ready.then(() => this.trackPostHydration(s, name, properties, callTimeSnapshot));
@@ -867,16 +912,36 @@ export class CrossdeckClient {
       }
     }
 
+    // Build the spec §4 context object — device/platform facts live
+    // here, NOT in properties. deviceModel uses Model if present,
+    // falls back to Brand (Android devices where Model may be absent).
+    const di = s.deviceInfo;
+    const eventContext: import("./event-queue").EventContext = {
+      sdkName: SDK_NAME,
+      sdkVersion: s.options.sdkVersion,
+      ...(di.os !== undefined && { os: di.os }),
+      ...(di.osVersion !== undefined && { osVersion: di.osVersion }),
+      ...(s.options.appVersion !== null && { appVersion: s.options.appVersion }),
+      ...(di.locale !== undefined && { locale: di.locale }),
+      ...(di.timezone !== undefined && { timezone: di.timezone }),
+      ...((di.model ?? di.brand) !== undefined && {
+        deviceModel: di.model ?? di.brand,
+      }),
+    };
+
     // Enrichment layer order (later wins on key conflict):
-    //   1. Device info
-    //   2. Super properties
-    //   3. Group memberships
-    //   4. SessionId (v1.4.0 Phase 3.4 — funnel parity with web)
-    //   5. Caller-supplied properties (sanitised)
-    const enriched: EventProperties = { ...s.deviceInfo };
+    //   1. Super properties
+    //   2. Group memberships
+    //   3. SessionId (v1.4.0 Phase 3.4 — funnel parity with web)
+    //   4. Caller-supplied properties (sanitised)
+    //
+    // Device info is now in `context` (spec §4) — NOT spread into
+    // properties. Removing { ...s.deviceInfo } from this layer is the
+    // intentional breaking wire change that requires the version bump.
+    const enriched: EventProperties = {};
     const supers = s.superProps.getSuperProperties();
     for (const k of Object.keys(supers)) {
-      if (!(k in enriched)) enriched[k] = supers[k];
+      enriched[k] = supers[k];
     }
     const groupIds = s.superProps.getGroupIds();
     if (Object.keys(groupIds).length > 0) {
@@ -903,7 +968,12 @@ export class CrossdeckClient {
     const event: QueuedEvent = {
       eventId: this.mintEventId(),
       name,
-      timestamp: Date.now(),
+      // Occurrence time co-sampled with seq at track() call time (see
+      // TrackCallSnapshot) — NOT Date.now() here, which on the pre-hydration
+      // path is flush time and would desync (timestamp, seq).
+      timestamp: callTimeSnapshot.timestamp,
+      seq: callTimeSnapshot.seq,
+      context: eventContext,
       properties: finalProperties,
     };
     Object.assign(event, this.identityHintForEvent());
@@ -1030,6 +1100,11 @@ export class CrossdeckClient {
   setSessionId(sessionId: string | null): void {
     const s = this.requireStarted();
     s.sessionId = sessionId ?? null;
+    // Spec §3: seq resets to 0 at session.started. A new session id
+    // always means a new session boundary — reset the counter so the
+    // first event of the new session carries seq=0. Clearing the id
+    // (null) also resets so the next session starts clean.
+    s.seqCounter = 0;
     if (s.debug.enabled) {
       s.debug.emit(
         "sdk.configured",

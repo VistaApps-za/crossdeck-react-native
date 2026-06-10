@@ -5,10 +5,132 @@
 
 import type { Contract } from "./contracts";
 
-export const BUNDLED_IN = "@cross-deck/react-native@1.5.0" as const;
-export const SDK_VERSION = "1.5.0" as const;
+export const BUNDLED_IN = "@cross-deck/react-native@1.6.0" as const;
+export const SDK_VERSION = "1.6.0" as const;
 
 export const BUNDLED_CONTRACTS: readonly Contract[] = Object.freeze([
+  {
+    "id": "contract-failed-payload-schema-lock",
+    "pillar": "diagnostics",
+    "status": "enforced",
+    "claim": "The `crossdeck.contract_failed` event payload contains ONLY the named diagnostic fields and never any end-user personal data. The wire shape is fixed — adding a new field requires (1) a pull request that updates this contract's `allowedFields` set, (2) a Privacy Policy §6 amendment, and (3) the Customer Disclosure Template / SDK Data Collection Reference §B updates. Per-SDK assertion tests enforce the field set on every release. The `verification_phase` field is a categorical bucket — values are restricted to `boot` (the SDK self-test ran on Crossdeck.start) or `hot_path` (a verifier observed a real customer-triggered operation). The categorical nature is what preserves the diagnostic-only-not-personal classification. This is the structural guarantee that backs the independent-controller lawful basis in the Privacy Policy: the payload remains diagnostic-only, not personal, so the legitimate-interest analysis stays valid as the SDK evolves.",
+    "appliesTo": [
+      "web",
+      "node",
+      "swift",
+      "android",
+      "react-native"
+    ],
+    "allowedFields": {
+      "required": [
+        "contract_id",
+        "sdk_version",
+        "sdk_platform",
+        "failure_reason",
+        "run_context",
+        "run_id"
+      ],
+      "optional": [
+        "test_file",
+        "test_name",
+        "device_class",
+        "verification_phase"
+      ],
+      "forbidden": [
+        "anonymousId",
+        "developerUserId",
+        "crossdeckCustomerId",
+        "email",
+        "ip",
+        "user_agent",
+        "message",
+        "stack",
+        "stack_trace",
+        "frames",
+        "exception_message",
+        "url",
+        "path",
+        "screen",
+        "title",
+        "label",
+        "text",
+        "ariaLabel",
+        "accessibilityLabel",
+        "contentDescription",
+        "session_id",
+        "sessionId"
+      ]
+    },
+    "transport": "Telemetry is single-fire to the Crossdeck reliability endpoint only — NOT the customer's appId. The customer's track() pipeline never carries `crossdeck.*` events; the customer's dashboard never shows individual contract failures. Operational telemetry flows one-way to the Crossdeck operations team for SDK reliability purposes (legitimate interest, independent-controller flow per Privacy Policy §6). The reliability endpoint is hardcoded at SDK build time; the publishable key for the reliability project is embedded as a constant and rejects writes that don't match the schema.",
+    "codeRef": [
+      "sdks/web/src/crossdeck.ts",
+      "sdks/node/src/crossdeck-server.ts",
+      "sdks/swift/Sources/Crossdeck/Crossdeck.swift",
+      "sdks/swift/Sources/Crossdeck/_DiagnosticTelemetry.swift",
+      "sdks/android/crossdeck/src/main/kotlin/com/crossdeck/Crossdeck.kt",
+      "sdks/android/crossdeck/src/main/kotlin/com/crossdeck/_DiagnosticTelemetry.kt",
+      "sdks/react-native/src/crossdeck.ts",
+      "backend/src/api/v1-sdk-diagnostic.ts",
+      "sdks/web/src/_diagnostic-telemetry.ts",
+      "sdks/node/src/_diagnostic-telemetry.ts",
+      "sdks/react-native/src/_diagnostic-telemetry.ts"
+    ],
+    "testRef": [
+      {
+        "file": "sdks/web/tests/contract-failed-schema-lock.test.ts",
+        "name": "reportContractFailure payload conforms to schema-lock"
+      },
+      {
+        "file": "sdks/node/tests/contract-failed-schema-lock.test.ts",
+        "name": "reportContractFailure payload conforms to schema-lock"
+      },
+      {
+        "file": "sdks/swift/Tests/CrossdeckTests/ContractFailedSchemaLockTests.swift",
+        "name": "test_reportContractFailure_payloadFieldsAreInAllowList"
+      },
+      {
+        "file": "sdks/swift/Tests/CrossdeckTests/ContractFailedSchemaLockTests.swift",
+        "name": "test_reportContractFailure_doesNotEnterCustomerTrackPipeline"
+      },
+      {
+        "file": "sdks/android/crossdeck/src/test/kotlin/com/crossdeck/ContractFailedSchemaLockTest.kt",
+        "name": "reportContractFailure payload conforms to schema-lock"
+      },
+      {
+        "file": "sdks/android/crossdeck/src/test/kotlin/com/crossdeck/ContractFailedSchemaLockTest.kt",
+        "name": "reportContractFailure does not enter customer track pipeline"
+      },
+      {
+        "file": "sdks/react-native/tests/contract-failed-schema-lock.test.ts",
+        "name": "reportContractFailure payload conforms to schema-lock"
+      },
+      {
+        "file": "backend/tests/unit/v1-sdk-diagnostic.test.ts",
+        "name": "forbidden fields are enumerated in the schema-lock contract"
+      },
+      {
+        "file": "backend/tests/unit/v1-sdk-diagnostic.test.ts",
+        "name": "required fields are enumerated in the schema-lock contract"
+      },
+      {
+        "file": "backend/tests/unit/v1-sdk-diagnostic.test.ts",
+        "name": "regression guard: never returns a raw IP"
+      },
+      {
+        "file": "backend/tests/unit/v1-sdk-diagnostic.test.ts",
+        "name": "verification_phase is in the optional field set"
+      }
+    ],
+    "registeredAt": "2026-05-27",
+    "firstRegisteredIn": "Diagnostic telemetry single-fire + schema-lock — independent-controller flow",
+    "privacyReferences": [
+      "legal/privacy/index.html#sdk-diagnostic",
+      "legal/customer-disclosure/index.html#flow-b",
+      "legal/security/index.html#diagnostic",
+      "legal/sdk-data/index.html#b-diagnostic"
+    ],
+    "bundledIn": "@cross-deck/react-native@1.6.0"
+  },
   {
     "id": "error-envelope-shape",
     "pillar": "errors",
@@ -46,7 +168,7 @@ export const BUNDLED_CONTRACTS: readonly Contract[] = Object.freeze([
     ],
     "registeredAt": "2026-05-26",
     "firstRegisteredIn": "bank-grade reconciliation v1.4.0 — phase 8 (codifies existing contract)",
-    "bundledIn": "@cross-deck/react-native@1.5.0"
+    "bundledIn": "@cross-deck/react-native@1.6.0"
   },
   {
     "id": "flush-interval-parity",
@@ -91,7 +213,7 @@ export const BUNDLED_CONTRACTS: readonly Contract[] = Object.freeze([
     ],
     "registeredAt": "2026-05-26",
     "firstRegisteredIn": "bank-grade reconciliation v1.4.0 — phase 3.3",
-    "bundledIn": "@cross-deck/react-native@1.5.0"
+    "bundledIn": "@cross-deck/react-native@1.6.0"
   },
   {
     "id": "idempotency-key-deterministic",
@@ -196,7 +318,7 @@ export const BUNDLED_CONTRACTS: readonly Contract[] = Object.freeze([
     ],
     "registeredAt": "2026-05-26",
     "firstRegisteredIn": "bank-grade reconciliation v1.4.0 — phase 2.2.a + 2.2.b + 2.2.c",
-    "bundledIn": "@cross-deck/react-native@1.5.0"
+    "bundledIn": "@cross-deck/react-native@1.6.0"
   },
   {
     "id": "init-reentry-drains-prior-queue",
@@ -223,7 +345,7 @@ export const BUNDLED_CONTRACTS: readonly Contract[] = Object.freeze([
     ],
     "registeredAt": "2026-05-26",
     "firstRegisteredIn": "bank-grade reconciliation v1.4.0 — phase 5.5",
-    "bundledIn": "@cross-deck/react-native@1.5.0"
+    "bundledIn": "@cross-deck/react-native@1.6.0"
   },
   {
     "id": "per-user-cache-isolation",
@@ -302,7 +424,7 @@ export const BUNDLED_CONTRACTS: readonly Contract[] = Object.freeze([
     ],
     "registeredAt": "2026-05-26",
     "firstRegisteredIn": "bank-grade reconciliation v1.4.0 — phase 1.3 (web/RN) + dogfood-gap fix (swift + android)",
-    "bundledIn": "@cross-deck/react-native@1.5.0"
+    "bundledIn": "@cross-deck/react-native@1.6.0"
   },
   {
     "id": "rn-session-id-enrichment",
@@ -335,7 +457,7 @@ export const BUNDLED_CONTRACTS: readonly Contract[] = Object.freeze([
     ],
     "registeredAt": "2026-05-26",
     "firstRegisteredIn": "bank-grade reconciliation v1.4.0 — phase 3.4",
-    "bundledIn": "@cross-deck/react-native@1.5.0"
+    "bundledIn": "@cross-deck/react-native@1.6.0"
   },
   {
     "id": "sync-purchases-funnel-parity",
@@ -368,6 +490,6 @@ export const BUNDLED_CONTRACTS: readonly Contract[] = Object.freeze([
     ],
     "registeredAt": "2026-05-26",
     "firstRegisteredIn": "bank-grade reconciliation v1.4.0 — phase 3.5",
-    "bundledIn": "@cross-deck/react-native@1.5.0"
+    "bundledIn": "@cross-deck/react-native@1.6.0"
   }
 ]) as readonly Contract[];

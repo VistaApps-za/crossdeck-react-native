@@ -1,6 +1,6 @@
 {
   "name": "@cross-deck/react-native",
-  "version": "1.5.1",
+  "version": "1.6.0",
   "description": "Crossdeck SDK for React Native + Expo — verified subscriptions, entitlements, error capture, and product telemetry across iOS + Android JS apps in one package.",
   "license": "MIT",
   "homepage": "https://cross-deck.com",

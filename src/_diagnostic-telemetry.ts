@@ -43,9 +43,12 @@ import { SDK_NAME, SDK_VERSION } from "./_version";
 export const DIAGNOSTIC_TELEMETRY_ENDPOINT =
   "https://api.cross-deck.com/v1/sdk/diagnostic";
 
-/** Reliability project's publishable key. Hardcoded constant. */
+/** Reliability project's publishable key. Hardcoded constant.
+ *  Provisioned 2026-05-27 — Crossdeck reliability workspace
+ *  (app_web_92b2d6a5728a4d). Every customer SDK's contract_failed
+ *  events route here for Crossdeck-on-Crossdeck observability. */
 export const DIAGNOSTIC_TELEMETRY_PUBLISHABLE_KEY =
-  "cd_pub_RELIABILITY_PLACEHOLDER_TO_BE_PROVISIONED";
+  "cd_pub_live_9490e7aa029c432abf";
 
 /**
  * Whether the telemetry is enabled. Disabled while the reliability

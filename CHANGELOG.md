@@ -4,6 +4,36 @@ All notable changes to `@cross-deck/react-native` will be documented
 here. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.6.0] — 2026-06-10
+
+Event Envelope v1 conformance — all three shared gaps from the Phase-0
+audit matrix (Q2 sequence, Q3 context drift, Q4 envelope version) are
+addressed in this release.
+
+**Added:**
+
+- **`envelopeVersion: 1`** on the batch envelope (POST body). Integer
+  schema version required by the server's reject-unversioned rule
+  (spec §6.1). Distinct from `sdk.version` — answers the ingest
+  parsing question, not Version Health.
+- **`seq` on every event** (spec §3). Per-session monotonic integer,
+  reset to 0 at `setSessionId()` (session boundary), incremented
+  synchronously at `track()` alongside `timestamp`. Persists across
+  app background/foreground within the same session per the spec's
+  non-negotiable §3 clauses.
+- **`context` object on every event** (spec §4). Standardised
+  device/platform fields promoted out of `properties`: `os`,
+  `osVersion`, `appVersion`, `sdkName`, `sdkVersion`, `locale`,
+  `timezone`, `deviceModel` (RN-specific; uses `Platform.constants.Model`
+  falling back to `Brand`).
+
+**Changed (breaking wire format):**
+
+- Device info fields (`os`, `osVersion`, `model`, `brand`, etc.)
+  are no longer spread into event `properties`. They live exclusively
+  in the top-level `context` object. App-supplied caller properties
+  remain in `properties` as before.
+
 ## [1.5.1] — 2026-05-27
 
 `crossdeck.contract_failed` is now single-fire to a dedicated

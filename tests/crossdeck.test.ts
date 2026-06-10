@@ -213,6 +213,99 @@ describe("track — PII scrub default-on", () => {
   });
 });
 
+describe("Event Envelope v1 wire shape (spec §1-4)", () => {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  async function getWireBody(_c: CrossdeckClient, fetchSpy: ReturnType<typeof vi.fn>) {
+    const eventsCall = fetchSpy.mock.calls.find((args: unknown[]) =>
+      String(args[0]).includes("/events"),
+    );
+    return JSON.parse((eventsCall![1] as RequestInit).body as string);
+  }
+
+  it("batch envelope carries envelopeVersion: 1", async () => {
+    const c = newClient();
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(202, { object: "list", received: 1, env: "sandbox" }));
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    c.track("test_event");
+    await c.flush();
+    const body = await getWireBody(c, fetchSpy);
+    expect(body.envelopeVersion).toBe(1);
+  });
+
+  it("every event carries a numeric seq (spec §3)", async () => {
+    const c = newClient();
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(202, { object: "list", received: 2, env: "sandbox" }));
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    c.track("first_event");
+    c.track("second_event");
+    await c.flush();
+    const body = await getWireBody(c, fetchSpy);
+    expect(body.events).toHaveLength(2);
+    expect(typeof body.events[0].seq).toBe("number");
+    expect(typeof body.events[1].seq).toBe("number");
+    expect(body.events[1].seq).toBeGreaterThan(body.events[0].seq);
+  });
+
+  it("seq resets to 0 when setSessionId is called with a new session (spec §3)", async () => {
+    const c = newClient();
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(202, { object: "list", received: 1, env: "sandbox" }));
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+
+    c.track("pre_session_event"); // seq=0 before any session
+    c.setSessionId("session_A");
+    c.track("session_A_event"); // seq=0 after reset
+    await c.flush();
+    const body = await getWireBody(c, fetchSpy);
+    // After setSessionId the counter resets; session_A_event must have seq=0
+    const sessionAEvent = body.events.find((e: { name: string }) => e.name === "session_A_event");
+    expect(sessionAEvent.seq).toBe(0);
+  });
+
+  it("every event carries a context object with sdkName + sdkVersion (spec §4)", async () => {
+    const c = newClient();
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(202, { object: "list", received: 1, env: "sandbox" }));
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    c.track("ctx_test");
+    await c.flush();
+    const body = await getWireBody(c, fetchSpy);
+    const ctx = body.events[0].context;
+    expect(ctx).toBeDefined();
+    expect(ctx.sdkName).toBe("@cross-deck/react-native");
+    expect(typeof ctx.sdkVersion).toBe("string");
+  });
+
+  it("device info is in context, NOT in properties (spec §4)", async () => {
+    const c = newClient({ appVersion: "9.9.9" });
+    const fetchSpy = vi
+      .fn()
+      .mockResolvedValue(jsonResponse(202, { object: "list", received: 1, env: "sandbox" }));
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    c.track("enrich_test");
+    await c.flush();
+    const body = await getWireBody(c, fetchSpy);
+    const props = body.events[0].properties;
+    const ctx = body.events[0].context;
+    // Device facts must not leak into properties
+    expect(props.os).toBeUndefined();
+    expect(props.osVersion).toBeUndefined();
+    expect(props.model).toBeUndefined();
+    expect(props.brand).toBeUndefined();
+    expect(props.locale).toBeUndefined();
+    expect(props.timezone).toBeUndefined();
+    // appVersion lives in context
+    expect(ctx.appVersion).toBe("9.9.9");
+    expect(props.appVersion).toBeUndefined();
+  });
+});
+
 describe("reset", () => {
   it("clears clock-skew snapshot", async () => {
     const c = newClient();

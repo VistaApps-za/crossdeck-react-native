@@ -4,11 +4,18 @@ import { PersistentEventStore } from "../src/event-storage";
 import { MemoryStorage } from "../src/storage";
 import { CrossdeckError } from "../src/errors";
 
+let _seq = 0;
 function fakeEvent(name: string): QueuedEvent {
   return {
     eventId: `evt_${name}_${Math.random().toString(36).slice(2)}`,
     name,
     timestamp: Date.now(),
+    seq: _seq++,
+    context: {
+      sdkName: "@cross-deck/react-native",
+      sdkVersion: "0.1.0-test",
+      os: "ios",
+    },
     properties: {},
     anonymousId: "anon_test",
   };
@@ -24,6 +31,7 @@ function fakeHttp(behaviour: "ok" | "fail" = "ok") {
 }
 
 const TEST_ENVELOPE = () => ({
+  envelopeVersion: 1 as const,
   appId: "app_rn_test",
   environment: "sandbox" as const,
   sdk: { name: "@cross-deck/react-native", version: "0.1.0-test" },
@@ -62,6 +70,44 @@ describe("EventQueue — basic", () => {
     await new Promise((r) => setTimeout(r, 0));
     const body = http.request.mock.calls[0]![2].body as { environment: string };
     expect(body.environment).toBe("sandbox");
+  });
+
+  it("envelope includes envelopeVersion: 1 (spec §1)", async () => {
+    const http = fakeHttp("ok");
+    const q = new EventQueue({
+      http: http as never,
+      batchSize: 1,
+      intervalMs: 10_000,
+      envelope: TEST_ENVELOPE,
+      scheduler: () => () => {},
+    });
+    q.enqueue(fakeEvent("check-version"));
+    await new Promise((r) => setTimeout(r, 0));
+    const body = http.request.mock.calls[0]![2].body as { envelopeVersion: number };
+    expect(body.envelopeVersion).toBe(1);
+  });
+
+  it("flushed events carry seq and context (spec §2–4)", async () => {
+    const http = fakeHttp("ok");
+    const q = new EventQueue({
+      http: http as never,
+      batchSize: 2,
+      intervalMs: 10_000,
+      envelope: TEST_ENVELOPE,
+      scheduler: () => () => {},
+    });
+    const evt0 = fakeEvent("first");
+    const evt1 = fakeEvent("second");
+    q.enqueue(evt0);
+    q.enqueue(evt1);
+    await new Promise((r) => setTimeout(r, 0));
+    const body = http.request.mock.calls[0]![2].body as { events: QueuedEvent[] };
+    expect(typeof body.events[0]!.seq).toBe("number");
+    expect(typeof body.events[1]!.seq).toBe("number");
+    expect(body.events[0]!.context).toMatchObject({ sdkName: "@cross-deck/react-native" });
+    expect(body.events[1]!.context).toMatchObject({ sdkName: "@cross-deck/react-native" });
+    // seq values must differ (monotonic)
+    expect(body.events[1]!.seq).toBeGreaterThan(body.events[0]!.seq);
   });
 });
 

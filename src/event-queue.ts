@@ -50,10 +50,35 @@ import { randomChars } from "./identity";
 
 const HARD_BUFFER_CAP = 1000;
 
+/**
+ * Standardised device/platform context — §4 of the Event Envelope spec v1.
+ * Promoted out of `properties` so the four SDKs share one named object
+ * rather than each inlining device fields into the event payload.
+ *
+ * Common fields (all platforms): os, osVersion, appVersion, sdkName,
+ * sdkVersion, locale, timezone.
+ * RN-specific: deviceModel (mapped from Platform.constants.Model or Brand).
+ */
+export interface EventContext {
+  os?: string;
+  osVersion?: string;
+  appVersion?: string;
+  sdkName: string;
+  sdkVersion: string;
+  locale?: string;
+  timezone?: string;
+  /** React Native / Apple / Android — device model string. */
+  deviceModel?: string;
+}
+
 export interface QueuedEvent {
   eventId: string;
   name: string;
   timestamp: number;
+  /** Per-session monotonic sequence number (spec §3). */
+  seq: number;
+  /** Standardised device/platform context (spec §4). */
+  context: EventContext;
   properties: EventProperties;
   // identity hint — at least anonymousId is always set
   developerUserId?: string;
@@ -62,6 +87,8 @@ export interface QueuedEvent {
 }
 
 export interface BatchEnvelope {
+  /** Integer schema version. Always 1 for this generation of the wire format. */
+  envelopeVersion: 1;
   appId: string;
   environment: "production" | "sandbox";
   sdk: { name: string; version: string };
@@ -251,6 +278,7 @@ export class EventQueue {
       const env = this.cfg.envelope();
       const result = await this.cfg.http.request<IngestResponse>("POST", "/events", {
         body: {
+          envelopeVersion: env.envelopeVersion,
           appId: env.appId,
           environment: env.environment,
           sdk: env.sdk,
